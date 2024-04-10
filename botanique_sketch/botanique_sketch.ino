@@ -6,8 +6,8 @@
 #include <Adafruit_ST7789.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <BotaniqueSecrets.h>
 #include "plant_image.h"
-
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 #define SCREEN_WIDTH 240
@@ -24,13 +24,6 @@ Adafruit_BME280 bme;                                                  // I2C
 Adafruit_ST7789 tft = Adafruit_ST7789(OLED_CS, OLED_DC, OLED_RESET);  // SPI
 WiFiClient espClient;
 PubSubClient client(espClient);
-
-// WiFi and Flespi credentials
-const char* ssid = "";      
-const char* password = "";
-const char* mqttServer = "mqtt.flespi.io";
-const int mqttPort = 1883;
-const char* mqttToken = "";
 
 // Base values measured by the sensor
 const int airMoisture = 3550;
@@ -62,12 +55,12 @@ void setup() {
   connectToWifi();
   connectToFlespi();
 
-  // TODO: intergrate with WS backend
-  // client.subscribe();
-  // client.setCallback();
+  client.subscribe(PLANT_MOOD_TOPIC);
+  client.setCallback(displayPlantMood);
 }
 
 void loop() {
+  client.loop();
   temperature = bme.readTemperature();
   pressure = bme.readPressure();
   humidity = bme.readHumidity();
@@ -89,7 +82,7 @@ void loop() {
 }
 
 void connectToWifi() {
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
@@ -98,12 +91,12 @@ void connectToWifi() {
 }
 
 void connectToFlespi() {
-  client.setServer(mqttServer, mqttPort);
+  client.setServer(MQTT_SERVER, MQTT_PORT);
 
   while (!client.connected()) {
     Serial.println("Connecting to MQTT...");
 
-    if (client.connect("ESP32Client", mqttToken, NULL, NULL, 1, false, NULL)) {
+    if (client.connect("ESP32Client", MQTT_TOKEN, NULL, NULL, 1, false, NULL)) {
 
       Serial.println("connected");
 
@@ -113,5 +106,44 @@ void connectToFlespi() {
       Serial.print(client.state());
       delay(2000);
     }
+  }
+}
+
+void displayPlantMood(const char* topic, byte* payload, unsigned int length) {
+  // Create a buffer to hold the payload as a string
+  char payloadStr[length + 1];
+  memcpy(payloadStr, payload, length);
+  payloadStr[length] = '\0';  // Null-terminate the string
+
+  // Parse the JSON payload
+  DynamicJsonDocument doc(1024);  // Adjust the size based on payload
+  DeserializationError error = deserializeJson(doc, payloadStr);
+
+  // Extract information from the JSON document
+  const int mood = doc["mood"];
+
+  // Check for parsing errors
+  if (error) {
+    Serial.print("JSON parsing error: ");
+    Serial.println(error.c_str());
+    return;
+  }
+
+  switch (mood) {
+    case 0:
+      Serial.println("Dead");
+      break;
+    case 1:
+      Serial.println("Unhappy");
+      break;
+    case 2:
+      Serial.println("Neutral");
+      break;
+    case 3:
+      Serial.println("Content");
+      break;
+    case 4:
+      Serial.println("Thriving");
+      break;
   }
 }
