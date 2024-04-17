@@ -6,16 +6,18 @@
 #include <Adafruit_ST7789.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <HTTPClient.h>
 #include <BotaniqueSecrets.h>
-#include "plant_image.h"
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 #define SCREEN_WIDTH 240
 #define SCREEN_HEIGHT 240
 
 #define OLED_DC 16
-#define OLED_CS 4
+#define OLED_CS 15
 #define OLED_RESET 17
+#define BUTTON 12
+#define LIGHT 34
 
 #define PLANT_MOOD_TOPIC "plant/mood"
 #define PLANT_DATA_TOPIC "plant/data"
@@ -28,16 +30,24 @@ PubSubClient client(espClient);
 // Base values measured by the sensor
 const int airMoisture = 3550;
 const int waterMoisture = 1620;
-
 const int soilSensor = 36;
+
+// Mood values
+int currentMood = 2;
+String currentMoodString = "neutral";
+String moods[] = { "dead", "unhappy", "neutral", "content", "thriving" };
 
 // Data
 float temperature;
 int pressure;
 int humidity;
 int soilMoisturePercentage;
+int lightLevel;
+
+int loopCounter = 0;
 
 void setup() {
+  pinMode(BUTTON, INPUT_PULLDOWN);
   Serial.begin(115200);
   while (!Serial) {}
   bool status;
@@ -48,65 +58,49 @@ void setup() {
       ;
   }
 
-  tft.init(240, 240, SPI_MODE2);  // Init ST7789 display 240x240 pixel
-  tft.setRotation(3);
-  tft.drawRGBBitmap(0, 0, plant_bitmap, 240, 240);
-
   connectToWifi();
   connectToFlespi();
 
   client.subscribe(PLANT_MOOD_TOPIC);
   client.setCallback(displayPlantMood);
+
+  tft.init(240, 240, SPI_MODE2);  // Init ST7789 display 240x240 pixel
+  tft.setRotation(1);
+  displayMoodEmoji(currentMood);
 }
 
 void loop() {
   client.loop();
+  loopCounter++;
+
   temperature = bme.readTemperature();
   pressure = bme.readPressure();
   humidity = bme.readHumidity();
   soilMoisturePercentage = map(analogRead(soilSensor), airMoisture, waterMoisture, 0, 100);
+  lightLevel = analogRead(LIGHT);
 
-  // Create a JSON document
-  StaticJsonDocument<200> doc;
-  doc["temperature"] = temperature;
-  doc["pressure"] = pressure;
-  doc["humidity"] = humidity;
-  doc["soilMoisturePercentage"] = soilMoisturePercentage;
-
-  // Serialize JSON to a buffer
-  char buffer[256];
-  size_t len = serializeJson(doc, buffer);
-
-  client.publish(PLANT_DATA_TOPIC, buffer, len);
-  delay(10000);
-}
-
-void connectToWifi() {
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  if (digitalRead(BUTTON) == HIGH) {
+    drawStatsScreen();
   }
-  Serial.println("Connected to the WiFi network");
-}
 
-void connectToFlespi() {
-  client.setServer(MQTT_SERVER, MQTT_PORT);
+  if (loopCounter > 10) {
+    loopCounter = 0;
+    // Create a JSON document
+    StaticJsonDocument<200> doc;
+    doc["temperature"] = temperature;
+    doc["pressure"] = pressure;
+    doc["humidity"] = humidity;
+    doc["soilMoisturePercentage"] = soilMoisturePercentage;
+    doc["lightLevel"] = lightLevel;
 
-  while (!client.connected()) {
-    Serial.println("Connecting to MQTT...");
+    // Serialize JSON to a buffer
+    char buffer[256];
+    size_t len = serializeJson(doc, buffer);
 
-    if (client.connect("ESP32Client", MQTT_TOKEN, NULL, NULL, 1, false, NULL)) {
-
-      Serial.println("connected");
-
-    } else {
-
-      Serial.print("failed with state ");
-      Serial.print(client.state());
-      delay(2000);
-    }
+    client.publish(PLANT_DATA_TOPIC, buffer, len);
   }
+
+  delay(1000);
 }
 
 void displayPlantMood(const char* topic, byte* payload, unsigned int length) {
@@ -121,29 +115,16 @@ void displayPlantMood(const char* topic, byte* payload, unsigned int length) {
 
   // Extract information from the JSON document
   const int mood = doc["mood"];
+  if (mood != currentMood) {
+    currentMood = mood;
+    currentMoodString = moods[mood];
+    displayMoodEmoji(currentMood);
+  }
 
   // Check for parsing errors
   if (error) {
     Serial.print("JSON parsing error: ");
     Serial.println(error.c_str());
     return;
-  }
-
-  switch (mood) {
-    case 0:
-      Serial.println("Dead");
-      break;
-    case 1:
-      Serial.println("Unhappy");
-      break;
-    case 2:
-      Serial.println("Neutral");
-      break;
-    case 3:
-      Serial.println("Content");
-      break;
-    case 4:
-      Serial.println("Thriving");
-      break;
   }
 }
