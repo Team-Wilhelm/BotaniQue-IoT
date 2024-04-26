@@ -19,7 +19,7 @@
 #define BUTTON 12
 #define LIGHT 34
 
-#define PLANT_MOOD_TOPIC "plant/mood"
+#define PLANT_MOOD_TOPIC "plant/mood/"
 #define PLANT_DATA_TOPIC "plant/data"
 
 Adafruit_BME280 bme;                                                  // I2C
@@ -39,10 +39,12 @@ String moods[] = { "dead", "unhappy", "neutral", "content", "thriving" };
 
 // Data
 float temperature;
-int pressure;
 int humidity;
 int soilMoisturePercentage;
 int lightLevel;
+
+uint64_t deviceId;
+String deviceIdSring;
 
 int loopCounter = 0;
 
@@ -58,10 +60,13 @@ void setup() {
       ;
   }
 
+  deviceId = ESP.getEfuseMac();
+  String fullTopic = PLANT_MOOD_TOPIC + String(deviceId);
+
   connectToWifi();
   connectToFlespi();
 
-  client.subscribe(PLANT_MOOD_TOPIC);
+  client.subscribe(fullTopic.c_str());
   client.setCallback(displayPlantMood);
 
   tft.init(240, 240, SPI_MODE2);  // Init ST7789 display 240x240 pixel
@@ -74,7 +79,6 @@ void loop() {
   loopCounter++;
 
   temperature = bme.readTemperature();
-  pressure = bme.readPressure();
   humidity = bme.readHumidity();
   soilMoisturePercentage = map(analogRead(soilSensor), airMoisture, waterMoisture, 0, 100);
   lightLevel = analogRead(LIGHT);
@@ -88,10 +92,10 @@ void loop() {
     // Create a JSON document
     StaticJsonDocument<200> doc;
     doc["temperature"] = temperature;
-    doc["pressure"] = pressure;
     doc["humidity"] = humidity;
     doc["soilMoisturePercentage"] = soilMoisturePercentage;
-    doc["lightLevel"] = lightLevel;
+    doc["light"] = lightLevel;
+    doc["deviceId"] = deviceId;
 
     // Serialize JSON to a buffer
     char buffer[256];

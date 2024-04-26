@@ -74,9 +74,7 @@ void displayMoodEmoji(int mood) {
 }
 
 void drawEmojiBase(uint16_t color) {
-  tft.drawCircle(120, 120, 90, ST77XX_BLACK);
-  tft.drawCircle(120, 120, 91, ST77XX_BLACK);
-  tft.drawCircle(120, 120, 92, ST77XX_BLACK);
+  tft.fillScreen(tft.color565(59,59,59));
   tft.fillCircle(120, 120, 90, color);
 
   tft.fillCircle(85, 94, 9, ST77XX_BLACK);
