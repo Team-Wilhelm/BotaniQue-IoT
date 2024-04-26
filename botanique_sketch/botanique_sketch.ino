@@ -87,7 +87,7 @@ void loop() {
     drawStatsScreen();
   }
 
-  if (loopCounter > 10) {
+  if (loopCounter > 600) {
     loopCounter = 0;
     // Create a JSON document
     StaticJsonDocument<200> doc;
