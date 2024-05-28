@@ -8,7 +8,6 @@
 #include <Adafruit_ST7789.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
-#include <HTTPClient.h>
 #include <BotaniqueSecrets.h>
 
 #define SEALEVELPRESSURE_HPA (1013.25)
